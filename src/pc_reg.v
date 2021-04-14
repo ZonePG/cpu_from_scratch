@@ -1,21 +1,21 @@
 module pc_reg(input wire clk,
               input wire rst,
-              output reg[5:0] pc,
+              output reg[`InstAddrBus] pc,
               output reg ce); // 指令存储器使能信号
     
     always @(posedge clk) begin
-        if (rst == 1'b1) begin
-            ce <= 1'b0; // 在复位信号有效的时候，指令存储器使能信号无效
+        if (rst == `RstEnable) begin
+            ce <= `ChipDisable; // 在复位信号有效的时候，指令存储器使能信号无效
         end else begin
-            ce <= 1'b1; // 复位信号无效的时候，指令存储器使能信号有效
+            ce <= `ChipEnable; // 复位信号无效的时候，指令存储器使能信号有效
         end
     end
     
     always @(posedge clk) begin
-        if (ce == 1'b0) begin
-            pc <= 6'h00;    // 指令存储器使能信号有效时，pc保持为0
+        if (ce == `ChipDisable) begin
+            pc <= `ZeroWord;    // 指令存储器使能信号有效时，pc保持为0
         end else begin
-            pc <= pc + 1'b1;
+            pc <= pc + 4'h4;       // 指令存储器使能时，pc的值每时钟周期加4
         end
     end
 
