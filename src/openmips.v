@@ -77,6 +77,12 @@ module openmips (
         // 来自 Regfile 模块的输入
         .reg1_data_i(reg1_data), .reg2_data_i(reg2_data),
 
+        // 来自执行阶段 EX 模块的输入，解决译码阶段与执行阶段数据相关
+        .ex_wreg_i(ex_wreg_o), .ex_wdata_i(ex_wdata_o), .ex_wd_i(ex_wd_o),
+
+        // 来自访存阶段 MEM 模块的输入，解决译码阶段与访存阶段数据相关
+        .mem_wreg_i(mem_wreg_o), .mem_wdata_i(mem_wdata_o), .mem_wd_i(mem_wd_o),
+
         // 送到 regfile 模块的信息
         .reg1_read_o(reg1_read), .reg2_read_o(reg2_read),
         .reg1_addr_o(reg1_addr), .reg2_addr_o(reg2_addr),
