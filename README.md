@@ -1,7 +1,7 @@
 # cpu_from_scratch
 an openmips cpu from scratch.
 
-从零实现一个一个入门级的五级流水单周期cpu。
+参考《自己动手写CPU》，从零实现一个一个入门级的五级流水单周期cpu。
 
 ## Intro
 - 仿真环境搭建参考 [轻量级Verilog仿真环境搭建iVerilog+GTKWave](https://zonepg.github.io/posts/programming/2021-03-25-iverilog-gtkwave/)
