@@ -29,7 +29,8 @@ inst_rom.bin: inst_rom.om
 	$(OBJCOPY) -O binary $< $@
 
 inst_rom.data: inst_rom.bin
-	./Bin2Mem -f $< -o $@
+	../Bin2Mem -f $< -o $@
+	cp inst_rom.data ../
 
 clean:
 	rm -f *.o *.om *.bin *.data *.asm

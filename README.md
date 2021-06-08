@@ -13,4 +13,5 @@ an openmips cpu from scratch.
 - [chapter4(ori)](https://github.com/ZonePG/cpu_from_scratch/tree/chapter4)
 - [chapter5(shift, logic)](https://github.com/ZonePG/cpu_from_scratch/tree/chapter5)
 - [chapter6(move)](https://github.com/ZonePG/cpu_from_scratch/tree/chapter6)
+- [chapter7(arithmetic)](https://github.com/ZonePG/cpu_from_scratch/tree/chapter7)
 - continuing...
