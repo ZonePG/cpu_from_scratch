@@ -41,6 +41,18 @@ module ex (
     reg[`RegBus] HI;        // 保存 HI 寄存器的最新值
     reg[`RegBus] LO;        // 保存 LO 寄存器的最新值
 
+    wire ov_sum;            // 保存溢出情况
+    wire reg1_eq_reg2;      // 第一个操作数是否等于第二个操作数
+    wire reg1_lt_reg2;      // 第一个操作数是否小于第二个操作数
+    reg[`RegBus] arithmeticres; // 保存算数运算的结构
+    wire[`RegBus] reg2_i_mux;    // 保存输入的第二个操作数 reg2_i 的补码
+    wire[`RegBus] reg1_i_not;    // 保存输入的第一个操作数 reg1_i 的反码
+    wire[`RegBus] result_sum;    // 保存假发结果
+    wire[`RegBus] opdata1_mult;  // 乘法操作中的被乘数
+    wire[`RegBus] opdata2_mult;  // 乘法操作中的乘数
+    wire[`DoubleRegBus] hilo_temp; // 临时保存乘法结果，宽度为 64 位
+    reg[`DoubleRegBus] mulres;     // 保存乘法结果，宽度为 64 位
+
     /*************** 进行逻辑运算 ***********/
     always @(*) begin
         if (rst == `RstEnable) begin
@@ -105,6 +117,130 @@ module ex (
     end
 
     /*****************************************************************************
+    **       第一段：计算以下 5 个变量的值                                      **
+    *****************************************************************************/
+    // (1) 减法或有符号比较运算
+    assign reg2_i_mux = ((aluop_i == `EXE_SUB_OP) ||
+                         (aluop_i == `EXE_SUBU_OP) ||
+                         (aluop_i == `EXE_SLT_OP)) ?
+                         (~reg2_i) + 1 : reg2_i;
+     
+    // (2) 满足加法运算、减法运算、有符号比较运算
+    assign result_sum = reg1_i + reg2_i_mux;
+
+    // (3) 计算溢出
+    // A. reg1_i 为正数，reg2_i_mux 为正数，和为负数
+    // B. reg1_i 为负数，reg2_i_mux 为负数，但是两者之和为正数
+    assign ov_sum = ((!reg1_i[31] && !reg2_i_mux[31]) && result_sum[31])
+    || ((reg1_i[31] && reg2_i_mux[31]) && (!result_sum[31]));
+
+    // (4) 计算操作数 1 是否小于操作数 2
+    // A.有符号比较：(负，正), (正，正)，(负，正)
+    // B. 无符号数比较，直接比较
+    assign reg1_lt_reg2 = ((aluop_i == `EXE_SLT_OP)) ?
+                        ((reg1_i[31] && !reg2_i[31]) ||
+                        (!reg1_i[31] && !reg2_i[31] && result_sum[31]) ||
+                        (reg1_i[31] && reg2_i[31] && result_sum[31]))
+                        : (reg1_i < reg2_i);
+
+    // (5) 对操作数 1 逐位取反。赋给 reg1_i_not
+    assign reg1_i_not = ~reg1_i;
+
+    /*****************************************************************************
+    **       第二段：依据不同的算术运算类型，给arithmeticres变量赋值            **
+    *****************************************************************************/
+
+    always @ (*) begin
+        if (rst == `RstEnable) begin
+            arithmeticres <= `ZeroWord;
+        end else begin
+            case (aluop_i)
+                `EXE_SLT_OP, `EXE_SLTU_OP: begin
+                    arithmeticres <= reg1_lt_reg2;
+                end
+                `EXE_ADD_OP, `EXE_ADDU_OP, `EXE_ADDI_OP, `EXE_ADDIU_OP: begin
+                    arithmeticres <= result_sum;
+                end
+                `EXE_SUB_OP, `EXE_SUBU_OP: begin
+                    arithmeticres <= result_sum;
+                end
+                `EXE_CLZ_OP: begin
+                    arithmeticres <= reg1_i[31] ? 0 : reg1_i[30] ? 1 :
+                                     reg1_i[29] ? 2 : reg1_i[28] ? 3 :
+                                     reg1_i[27] ? 4 : reg1_i[26] ? 5 :
+                                     reg1_i[25] ? 6 : reg1_i[24] ? 7 :
+                                     reg1_i[23] ? 8 : reg1_i[22] ? 9 :
+                                     reg1_i[21] ? 10 : reg1_i[20] ? 11 :
+                                     reg1_i[19] ? 12 : reg1_i[18] ? 13 :
+                                     reg1_i[17] ? 14 : reg1_i[16] ? 15 :
+                                     reg1_i[15] ? 16 : reg1_i[14] ? 17 :
+                                     reg1_i[13] ? 18 : reg1_i[12] ? 19 :
+                                     reg1_i[11] ? 20 : reg1_i[10] ? 21 :
+                                     reg1_i[9] ? 22 : reg1_i[8] ? 23 :
+                                     reg1_i[7] ? 24 : reg1_i[6] ? 25 :
+                                     reg1_i[5] ? 26 : reg1_i[4] ? 27 :
+                                     reg1_i[3] ? 28 : reg1_i[2] ? 29 :
+                                     reg1_i[1] ? 30 : reg1_i[0] ? 31 : 32;
+                end
+                `EXE_CLO_OP: begin
+                    arithmeticres <= reg1_i_not[31] ? 0 : reg1_i_not[30] ? 1 :
+                                     reg1_i_not[29] ? 2 : reg1_i_not[28] ? 3 :
+                                     reg1_i_not[27] ? 4 : reg1_i_not[26] ? 5 :
+                                     reg1_i_not[25] ? 6 : reg1_i_not[24] ? 7 :
+                                     reg1_i_not[23] ? 8 : reg1_i_not[22] ? 9 :
+                                     reg1_i_not[21] ? 10 : reg1_i_not[20] ? 11 :
+                                     reg1_i_not[19] ? 12 : reg1_i_not[18] ? 13 :
+                                     reg1_i_not[17] ? 14 : reg1_i_not[16] ? 15 :
+                                     reg1_i_not[15] ? 16 : reg1_i_not[14] ? 17 :
+                                     reg1_i_not[13] ? 18 : reg1_i_not[12] ? 19 :
+                                     reg1_i_not[11] ? 20 : reg1_i_not[10] ? 21 :
+                                     reg1_i_not[9] ? 22 : reg1_i_not[8] ? 23 :
+                                     reg1_i_not[7] ? 24 : reg1_i_not[6] ? 25 :
+                                     reg1_i_not[5] ? 26 : reg1_i_not[4] ? 27 :
+                                     reg1_i_not[3] ? 28 : reg1_i_not[2] ? 29 :
+                                     reg1_i_not[1] ? 30 : reg1_i_not[0] ? 31 : 32;
+                end
+                default: begin
+                    arithmeticres <= `ZeroWord;
+                end
+            endcase
+        end
+    end
+
+    /*****************************************************************************
+    **       第三段：乘法运算                                                   **
+    *****************************************************************************/
+    // (1) 取得乘法运算的被乘数，如果是有符号乘法且被乘数是负数，那么取补码
+    assign opdata1_mult = (((aluop_i == `EXE_MUL_OP) || (aluop_i == `EXE_MULT_OP)) &&
+                            (reg1_i[31] == 1'b1)) ? (~reg1_i + 1) : reg1_i;
+
+    // (2) 取得乘法运算的乘数，如果是有符号乘法且乘数是负数，那么取补码
+    assign opdata2_mult = (((aluop_i == `EXE_MUL_OP) || (aluop_i == `EXE_MULT_OP)) &&
+                            (reg2_i[31] == 1'b1)) ? (~reg2_i + 1) : reg2_i;
+
+    // (3) 得到临时乘法结果，保存在变量hilo_temp中
+    assign hilo_temp = opdata1_mult * opdata2_mult;
+
+    // (4) 对临时乘法结果进行修正，最终的乘法结果保存在变量 mulres 中，主要有两点：
+    // A. 有符号乘法mult、mul，修正临时乘法结构，如下：
+    //    A1. 一正一负：结果求补码
+    //    A2. 同号，直接赋值
+    // B. 如果无符号乘法指令 multu，那么直接赋值
+    always @ (*) begin
+        if (rst == `RstEnable) begin
+            mulres <= {`ZeroWord, `ZeroWord};
+        end else if ((aluop_i == `EXE_MULT_OP) || (aluop_i == `EXE_MUL_OP)) begin
+            if (reg1_i[31] ^ reg2_i[31] == 1'b1) begin
+                mulres <= ~hilo_temp + 1;
+            end else begin
+                mulres <= hilo_temp;
+            end
+        end else begin
+            mulres <= hilo_temp;
+        end
+    end
+
+    /*****************************************************************************
     **       第二段：MFHI、MFLO、MOVN、MOVZ指令                                    **
     *****************************************************************************/
     always @(*) begin
@@ -136,11 +272,15 @@ module ex (
     end
 
     /*****************************************************************************
-    **       第三段：依据运类型alusel_i的值，确定 wdata_o的值                         **
+    **       第四段：确定要写入目的寄存器的数据                                 **
     *****************************************************************************/
     always @(*) begin
         wd_o <= wd_i;
-        wreg_o <= wreg_i;
+        if (((aluop_i == `EXE_ADD_OP) || (aluop_i == `EXE_ADDI_OP) || (aluop_i == `EXE_SUB_OP)) && (ov_sum == 1'b1)) begin
+            wreg_o <= `WriteDisable;
+        end else begin
+            wreg_o <= wreg_i;
+        end
         case (alusel_i)
             `EXE_RES_LOGIC: begin
                 wdata_o <= logicout;    // 选择逻辑运算结果作为最终结果
@@ -151,6 +291,12 @@ module ex (
             `EXE_RES_MOVE: begin
                 wdata_o <= moveres;
             end
+            `EXE_RES_ARITHMETIC: begin  // 除乘法外的简单算术操作指令
+                wdata_o <= arithmeticres;
+            end
+            `EXE_RES_MUL: begin
+                wdata_o <= mulres[31:0];
+            end
             default: begin
                 wdata_o <= `ZeroWord;
             end
@@ -158,13 +304,18 @@ module ex (
     end
 
     /*****************************************************************************
-    **       第四段：如果是 MTHI、MTLO指，那么需要给出 whilo_o，hi_o，lo_i的值          **
+    **       第五段：确定HI、LO寄存器的操作信息                                 **
     *****************************************************************************/
     always @(*) begin
         if (rst == `RstEnable) begin
             whilo_o <= `WriteEnable;
             hi_o <= `ZeroWord;
             lo_o <= `ZeroWord;
+        end else if ((aluop_i == `EXE_MULT_OP) ||
+                     (aluop_i == `EXE_MULTU_OP)) begin // mult、multu指令
+            whilo_o <= `WriteEnable;
+            hi_o <= mulres[63:32];
+            lo_o <= mulres[31:0];
         end else if (aluop_i == `EXE_MTHI_OP) begin
             whilo_o <= `WriteEnable;
             hi_o <= reg1_i;
