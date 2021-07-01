@@ -11,6 +11,8 @@ module mem_wb(
     input wire[`RegBus] mem_lo,
     input wire mem_whilo,
 
+    input wire[5:0] stall,
+
     // 送到回写阶段的信息
     output reg[`RegAddrBus] wb_wd,
     output reg wb_wreg,
@@ -21,6 +23,10 @@ module mem_wb(
     output reg wb_whilo
 );
 
+    // (1) 当stall[4]为Stop，stall[5]为NoStop时，表示访存阶段暂停
+    //  回写阶段继续，用空指令作为下一周期进入执行阶段的指令
+    // (2) 当stall[4]为NoStop时，访存阶段继续，访存后的指令进入回写阶段
+    // (3) 其余情况，保持不变
     always @(posedge clk) begin
         if (rst == `RstEnable) begin
             wb_wd <= `NOPRegAddr;
@@ -29,7 +35,14 @@ module mem_wb(
             wb_hi <= `ZeroWord;
             wb_lo <= `ZeroWord;
             wb_whilo <= `WriteDisable;
-        end else begin
+        end else if (stall[4] == `Stop && stall[5] == `NoStop) begin
+            wb_wd <= `NOPRegAddr;
+            wb_wreg <= `WriteDisable;
+            wb_wdata <= `ZeroWord;
+            wb_hi <= `ZeroWord;
+            wb_lo <= `ZeroWord;
+            wb_whilo <= `WriteDisable;
+        end else if (stall[4] == `NoStop) begin
             wb_wd <= mem_wd;
             wb_wreg <= mem_wreg;
             wb_wdata <= mem_wdata;
